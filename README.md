@@ -1,1 +1,453 @@
-# CALLEN67boi.gihtub.io
+# CALLEN67boi.gihtub.io<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Military Campaign Strategy</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #11141a;
+            color: #e0e6ed;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            width: 1024px;
+            margin: 20px auto;
+            background: #1a1f29;
+            border: 2px solid #3b485d;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background: #232b38;
+            border-bottom: 2px solid #3b485d;
+        }
+
+        .resource-display {
+            display: flex;
+            gap: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .resource {
+            padding: 5px 10px;
+            border-radius: 4px;
+            background: #11141a;
+        }
+
+        .mass { color: #4caf50; border-left: 4px solid #4caf50; }
+        .energy { color: #00bcd4; border-left: 4px solid #00bcd4; }
+
+        #game-canvas {
+            background: #141922;
+            display: block;
+        }
+
+        #control-panel {
+            display: flex;
+            background: #232b38;
+            border-top: 2px solid #3b485d;
+            padding: 15px;
+            gap: 20px;
+        }
+
+        .panel-section {
+            flex: 1;
+            background: #1a1f29;
+            border: 1px solid #3b485d;
+            border-radius: 4px;
+            padding: 10px;
+        }
+
+        .panel-section h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #8b9bb4;
+            border-bottom: 1px solid #3b485d;
+            padding-bottom: 5px;
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        button {
+            background: #2e3846;
+            color: #fff;
+            border: 1px solid #4f5e75;
+            padding: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 4px;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.85em;
+        }
+
+        button:hover:not(:disabled) {
+            background: #3b485d;
+            border-color: #00bcd4;
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        button span.cost {
+            font-size: 0.75em;
+            font-weight: normal;
+            color: #a0aec0;
+            margin-top: 2px;
+        }
+
+        #status-ticker {
+            padding: 8px 20px;
+            background: #11141a;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #00ffcc;
+            min-height: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <header>
+        <h2>Strategic Command: Frontline</h2>
+        <div class="resource-display">
+            <div class="resource mass">Mass: <span id="res-mass">100</span> (+<span id="rate-mass">2</span>/s)</div>
+            <div class="resource energy">Energy: <span id="res-energy">100</span> (+<span id="rate-energy">5</span>/s)</div>
+        </div>
+    </header>
+
+    <canvas id="game-canvas" width="1024" height="400"></canvas>
+    
+    <div id="status-ticker">Systems Operational. Establish your forward base.</div>
+
+    <div id="control-panel">
+        <div class="panel-section">
+            <h3>Economy Upgrades</h3>
+            <div class="btn-grid">
+                <button id="btn-mass-ext" onclick="buildStructure('massExtractor', 50, 100)">
+                    Mass Extractor
+                    <span class="cost">M: 50 | E: 100</span>
+                </button>
+                <button id="btn-pgen" onclick="buildStructure('powerGen', 80, 40)">
+                    Power Generator
+                    <span class="cost">M: 80 | E: 40</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <h3>Deploy Forces</h3>
+            <div class="btn-grid">
+                <button id="btn-unit-light" onclick="spawnUnit('light', 40, 20)">
+                    Light Assault
+                    <span class="cost">M: 40 | E: 20</span>
+                </button>
+                <button id="btn-unit-heavy" onclick="spawnUnit('heavy', 100, 80)">
+                    Heavy Armor
+                    <span class="cost">M: 100 | E: 80</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <h3>Base Vitality</h3>
+            <div style="margin-top: 5px;">Your HQ: <span id="player-hq-hp" style="color:#4caf50; font-weight:bold;">1000</span> HP</div>
+            <div style="margin-top: 5px;">Enemy HQ: <span id="enemy-hq-hp" style="color:#f44336; font-weight:bold;">1000</span> HP</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Game State
+    const player = {
+        mass: 150,
+        energy: 150,
+        massGeneration: 2,
+        energyGeneration: 5,
+        hqHp: 1000,
+        extractors: 1,
+        pgens: 1
+    };
+
+    const enemy = {
+        mass: 100,
+        energy: 100,
+        massGeneration: 3,
+        energyGeneration: 6,
+        hqHp: 1000,
+        aiTimer: 0
+    };
+
+    const units = [];
+    const particles = [];
+    
+    // Config Types
+    const UNIT_TYPES = {
+        light: { speed: 1.5, hp: 60, damage: 12, range: 40, color: '#00bcd4', size: 8, attackSpeed: 45 },
+        heavy: { speed: 0.8, hp: 200, damage: 35, range: 70, color: '#4caf50', size: 12, attackSpeed: 90 },
+        enemy_light: { speed: -1.5, hp: 60, damage: 12, range: 40, color: '#e91e63', size: 8, attackSpeed: 45 },
+        enemy_heavy: { speed: -0.8, hp: 200, damage: 35, range: 70, color: '#9c27b0', size: 12, attackSpeed: 90 }
+    };
+
+    function logStatus(msg) {
+        document.getElementById('status-ticker').innerText = msg;
+    }
+
+    function buildStructure(type, massCost, energyCost) {
+        if (player.mass >= massCost && player.energy >= energyCost) {
+            player.mass -= massCost;
+            player.energy -= energyCost;
+            if (type === 'massExtractor') {
+                player.extractors++;
+                player.massGeneration += 2;
+                logStatus("Mass Extractor online. Production increased.");
+            } else if (type === 'powerGen') {
+                player.pgens++;
+                player.energyGeneration += 5;
+                logStatus("Power Generator built. Grid capacity expanded.");
+            }
+        }
+    }
+
+    function spawnUnit(type, massCost, energyCost, isEnemy = false) {
+        if (!isEnemy) {
+            if (player.mass >= massCost && player.energy >= energyCost) {
+                player.mass -= massCost;
+                player.energy -= energyCost;
+                
+                // Spawn 3 units dynamic across 3 lanes
+                const lane = Math.floor(Math.random() * 3);
+                const yPos = 120 + lane * 80;
+                
+                units.push({
+                    x: 100,
+                    y: yPos,
+                    lane: lane,
+                    isEnemy: false,
+                    ...JSON.parse(JSON.stringify(UNIT_TYPES[type])),
+                    maxHp: UNIT_TYPES[type].hp,
+                    cooldown: 0
+                });
+                logStatus(`Deploying combat unit: ${type.toUpperCase()}`);
+            }
+        } else {
+            const lane = Math.floor(Math.random() * 3);
+            const yPos = 120 + lane * 80;
+            const blueprint = type === 'light' ? 'enemy_light' : 'enemy_heavy';
+            units.push({
+                x: canvas.width - 100,
+                y: yPos,
+                lane: lane,
+                isEnemy: true,
+                ...JSON.parse(JSON.stringify(UNIT_TYPES[blueprint])),
+                maxHp: UNIT_TYPES[blueprint].hp,
+                cooldown: 0
+            });
+        }
+    }
+
+    // Economy ticks (once per second)
+    setInterval(() => {
+        player.mass += player.massGeneration;
+        player.energy += player.energyGeneration;
+        
+        enemy.mass += enemy.massGeneration;
+        enemy.energy += enemy.energyGeneration;
+    }, 1000);
+
+    // AI logic loop
+    function updateAI() {
+        enemy.aiTimer++;
+        if (enemy.aiTimer > 120) { // Every ~2 seconds at 60fps
+            enemy.aiTimer = 0;
+            if (enemy.mass >= 100 && Math.random() > 0.4) {
+                enemy.mass -= 100;
+                spawnUnit('heavy', 0, 0, true);
+            } else if (enemy.mass >= 40) {
+                enemy.mass -= 40;
+                spawnUnit('light', 0, 0, true);
+            }
+            
+            // Passive enemy econ growth
+            if (Math.random() > 0.8) {
+                enemy.massGeneration += 0.5;
+            }
+        }
+    }
+
+    function createExplosion(x, y, color) {
+        for (let i = 0; i < 8; i++) {
+            particles.push({
+                x: x, y: y,
+                vx: (Math.random() - 0.5) * 4,
+                vy: (Math.random() - 0.5) * 4,
+                alpha: 1,
+                color: color
+            });
+        }
+    }
+
+    function update() {
+        updateAI();
+
+        // Control UI state updates
+        document.getElementById('res-mass').innerText = Math.floor(player.mass);
+Use code with caution.
+document.getElementById('res-energy').innerText = Math.floor(player.energy);
+document.getElementById('rate-mass').innerText = player.massGeneration;
+document.getElementById('rate-energy').innerText = player.energyGeneration;
+document.getElementById('player-hq-hp').innerText = Math.max(0, player.hqHp);
+document.getElementById('enemy-hq-hp').innerText = Math.max(0, enemy.hqHp);
+document.getElementById('btn-mass-ext').disabled = (player.mass < 50 || player.energy < 100);
+document.getElementById('btn-pgen').disabled = (player.mass < 80 || player.energy < 40);
+document.getElementById('btn-unit-light').disabled = (player.mass < 40 || player.energy < 20);
+document.getElementById('btn-unit-heavy').disabled = (player.mass < 100 || player.energy < 80);
+if (player.hqHp <= 0) {
+alert("Your HQ was leveled! Campaign Failure.");
+window.location.reload();
+}
+if (enemy.hqHp <= 0) {
+alert("Victory! The enemy fortress has fallen.");
+window.location.reload();
+}
+// Particle dynamics
+for (let i = particles.length - 1; i >= 0; i--) {
+let p = particles[i];
+p.x += p.vx;
+p.y += p.vy;
+p.alpha -= 0.04;
+if (p.alpha <= 0) particles.splice(i, 1);
+}
+// Process units
+for (let i = 0; i < units.length; i++) {
+let u = units[i];
+let target = null;
+let closestDist = Infinity;
+if (u.cooldown > 0) u.cooldown--;
+// Find closest adversary in same lane
+for (let j = 0; j < units.length; j++) {
+let targetCandidate = units[j];
+if (u.isEnemy !== targetCandidate.isEnemy && u.lane === targetCandidate.lane) {
+let dist = Math.abs(u.x - targetCandidate.x);
+if (dist < closestDist) {
+closestDist = dist;
+target = targetCandidate;
+}
+}
+}
+// Combat engagement vs Unit
+if (target && closestDist <= u.range) {
+if (u.cooldown === 0) {
+target.hp -= u.damage;
+u.cooldown = u.attackSpeed;
+createExplosion(target.x, target.y, u.color);
+}
+}
+// Combat engagement vs Core Structures
+else if (!u.isEnemy && u.x >= canvas.width - 120) {
+if (u.cooldown === 0) {
+enemy.hqHp -= u.damage;
+u.cooldown = u.attackSpeed;
+createExplosion(canvas.width - 100, u.y, u.color);
+}
+} else if (u.isEnemy && u.x <= 120) {
+if (u.cooldown === 0) {
+player.hqHp -= u.damage;
+u.cooldown = u.attackSpeed;
+createExplosion(100, u.y, u.color);
+}
+}
+// Advance forward
+else {
+u.x += u.speed;
+}
+}
+// Clean up structural casualties
+for (let i = units.length - 1; i >= 0; i--) {
+if (units[i].hp <= 0) {
+createExplosion(units[i].x, units[i].y, '#ff5722');
+units.splice(i, 1);
+}
+}
+}
+function draw() {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+// Grid lines/Lanes visualization
+ctx.strokeStyle = '#1f2937';
+ctx.lineWidth = 2;
+for (let i = 0; i < 3; i++) {
+let y = 120 + i * 80;
+ctx.beginPath();
+ctx.moveTo(0, y);
+ctx.lineTo(canvas.width, y);
+ctx.stroke();
+}
+// Draw bases
+// Player Base Core
+ctx.fillStyle = '#1e3a8a';
+ctx.fillRect(0, 50, 100, 300);
+ctx.strokeStyle = '#3b82f6';
+ctx.lineWidth = 3;
+ctx.strokeRect(0, 50, 100, 300);
+// Enemy Base Core
+ctx.fillStyle = '#741b47';
+ctx.fillRect(canvas.width - 100, 50, 100, 300);
+ctx.strokeStyle = '#ef4444';
+ctx.lineWidth = 3;
+ctx.strokeRect(canvas.width - 100, 50, 100, 300);
+// Render Active Units
+units.forEach(u => {
+ctx.fillStyle = u.color;
+ctx.beginPath();
+ctx.arc(u.x, u.y, u.size, 0, Math.PI * 2);
+ctx.fill();
+// Unit Health Bars
+ctx.fillStyle = '#555';
+ctx.fillRect(u.x - u.size, u.y - u.size - 8, u.size * 2, 3);
+ctx.fillStyle = '#4caf50';
+let hpPercent = u.hp / u.maxHp;
+ctx.fillRect(u.x - u.size, u.y - u.size - 8, (u.size * 2) * hpPercent, 3);
+});
+// Render SFX Particles
+particles.forEach(p => {
+ctx.save();
+ctx.globalAlpha = p.alpha;
+ctx.fillStyle = p.color;
+ctx.fillRect(p.x, p.y, 3, 3);
+ctx.restore();
+});
+}
+function gameLoop() {
+update();
+draw();
+requestAnimationFrame(gameLoop);
+}
+// Start Campaign
+gameLoop();
